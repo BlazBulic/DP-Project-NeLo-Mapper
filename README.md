@@ -1,144 +1,49 @@
-\documentclass[11pt]{article}
-\usepackage[margin=1in]{geometry}
-\usepackage[hidelinks]{hyperref}
-\usepackage{listings}
-\usepackage{xcolor}
-\usepackage{enumitem}
-\usepackage{titling}
+# DP-Project-NeLo-Mapper
 
-\definecolor{codegray}{gray}{0.95}
-\lstset{
-  backgroundcolor=\color{codegray},
-  basicstyle=\ttfamily\small,
-  breaklines=true,
-  frame=single,
-  columns=fullflexible,
-  keepspaces=true
-}
+This reposirety integrates [**NeLo (Neural Laplacian operators)**](https://arxiv.org/abs/2409.06506)  with [**Mapper**](https://research.math.osu.edu/tgda/mapperPBG.pdf) for 3D point-cloud segmentation. Its built on top of the original Nelo codebase by Pang *et al.* (https://github.com/IntelligentGeometry/NeLo).
 
-\pretitle{\begin{center}\LARGE\bfseries}
-\posttitle{\end{center}\vspace{1em}}
-\title{DP-Project-NeLo-Mapper \\ \large\texttt{README}}
-\author{Blaž Bulić}
-\date{}
+## Requirements
 
-\begin{document}
-\maketitle
+As previously mentioned this is built on top of the original NeLo codebase. To install the required packages and libraries follow the instructions on https://github.com/IntelligentGeometry/NeLo. <br/>
+Additional requirements are the python libraries: ebreex, matplotlib, mpl_toolkits, kmapper, scipy and sklearn.
 
-\section*{Overview}
-This repository integrates \textbf{NeLo} (Neural Laplacian Operators) with \textbf{Mapper} for 3D point-cloud segmentation. It is built upon the original NeLo codebase by Pang \emph{et al.} (\href{https://github.com/IntelligentGeometry/NeLo}{IntelligentGeometry/NeLo}). We provide three pipelines:
-\begin{enumerate}[nosep]
-  \item Spectral + KMeans  
-  \item Mapper using NeLo‐learned filters  
-  \item Mapper using manually computed Gaussian–Laplacian filters  
-\end{enumerate}
+## Extraction the Learned Laplacian
 
-\section{Requirements}
-\begin{itemize}[nosep]
-  \item \textbf{OS:} Ubuntu 22.04  
-  \item \textbf{Python:} 3.10  
-  \item \textbf{Core packages:}
-    \begin{itemize}[nosep]
-      \item \texttt{torch\ge2.3}, \texttt{pytorch-lightning}, \texttt{torch-geometric}  
-      \item \texttt{numpy}, \texttt{scipy}, \texttt{trimesh}, \texttt{pyembree}  
-      \item \texttt{pymeshlab}, \texttt{joblib}, \texttt{kmapper}  
-      \item \texttt{scikit-learn}, \texttt{matplotlib}, \texttt{rich}, \texttt{tqdm}
-    \end{itemize}
-\end{itemize}
+Once you run the NeLo's data preparation process you will find your processed objects in `data/processed_data` folder. Next place the `.obj` file of your object/s in the `data/plane/test_meshes` folder and run:
 
-\paragraph{Conda environment setup}
-\begin{lstlisting}
-conda create -n nelo-mapper python=3.10
-conda activate nelo-mapper
+```bash
+bash script/test_on_plane.sh
+```
 
-# PyTorch + CUDA
-conda install pytorch torchvision torchaudio pytorch-cuda=11.8 \
-    -c pytorch -c nvidia
+This will save the learned Laplacian matrix in the `out/predicted_L/` folder.
 
-# PyG
-conda install pyg -c pyg
+## Segmentation and Evaluation
 
-# remaining deps
-pip install numpy scipy trimesh pyembree pymeshlab \
-    joblib kmapper scikit-learn matplotlib rich tqdm
-\end{lstlisting}
+To produce the segmentations and evaluate them run: 
 
-\section{Data Preparation}
-\begin{enumerate}[nosep]
-  \item Place raw meshes in \texttt{data/raw\_data/\<category\>/\*.obj}.  
-  \item Run processing script:
-  \begin{lstlisting}
-cd src/data_prepare
-python generate_processed_mesh.py
-  \end{lstlisting}
-  Processed meshes will appear under \texttt{data/processed\_data/\<category\>/}.
-\end{enumerate}
+```bash
+python b_segmentation.py "path_to_your_object" "path_to_the_objects_laplacian_matrix"
+```
 
-\section{Extracting the Learned Laplacian}
-\begin{enumerate}[nosep]
-  \item Copy pretrained checkpoint (\texttt{.ckpt}) into \texttt{out/checkpoints/}.  
-  \item Run:
-  \begin{lstlisting}
-python main.py --config config/chair_cache.py
-python main.py --config config/chair_test.py
-  \end{lstlisting}
-  \item Learned Laplacian matrices (\texttt{.npz}) appear in \texttt{out/predicted\_L/}.
-\end{enumerate}
+example:
 
-\section{Segmentation \& Evaluation}
-Use the segmentation script to run all three methods, compute  
-\emph{Silhouette}, \emph{Davies–Bouldin}, and \emph{Calinski–Harabasz} scores,  
-and visualize 3D results:
-\begin{lstlisting}
-python blaz_segmentation.py \
-  data/chair/test_meshes/<mesh>.obj \
-  out/predicted_L/<mesh>.npz
-\end{lstlisting}
+```bash
+python b_segmentation.py data/plane/test_meshes/plane.obj out/predicted_L/1db7bca33ba446aba5cac89017eae8d1.npz
+```
 
-Output:
-\begin{itemize}[nosep]
-  \item Console table of metrics  
-  \item Bar charts of each metric  
-  \item 3‐panel 3D scatter (side‐by‐side)
-\end{itemize}
+Additionaly if you want to visualize your original object run: 
 
-\section{Repository Structure}
-\begin{verbatim}
-.
-├── data
-│   ├── raw_data/
-│   └── processed_data/
-│       └── chair/
-│           └── test_meshes/
-├── out
-│   ├── checkpoints/
-│   └── predicted_L/
-├── src
-│   ├── data_prepare/
-│   │   └── generate_processed_mesh.py
-│   ├── modules/
-│   ├── models/
-│   ├── pipeline.py
-│   └── my_dataset.py
-├── config
-│   ├── global_config.py
-│   ├── chair_cache.py
-│   └── chair_test.py
-├── blaz_segmentation.py
-├── main.py
-├── requirements.txt
-└── README.tex
-\end{verbatim}
+```bash
+python b_visualize_obj.py "path_to_your_oject"
+```
 
-\section{Citation}
-If using this work, please cite:
-\begin{lstlisting}
-@article{pang2024neural,
-  title={Neural Laplacian Operator for 3D Point Clouds},
-  author={Pang, Bo and Zheng, Zhongtian and Li, Yilong and Wang, Guoping and Wang, Peng-Shuai},
-  journal={ACM Trans. on Graphics (SIGGRAPH Asia)},
-  year={2024}
-}
-\end{lstlisting}
+example:
 
-\end{document}
+```bash
+python b_visualize_obj.py data/plane/test_meshes/plane.obj
+```
+
+For visual guidance check out the 
+
+
+If you have any questions, please feel free to contact me at bb53717@student.uni-lj.si
