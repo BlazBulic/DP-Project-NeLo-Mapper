@@ -22,10 +22,16 @@ def load_point_cloud(path):
         raise ValueError(f"Unsupported point cloud extension: {ext}")
 
 
+def count_clusters(labels):
+    unique = set(labels.tolist())
+    if -1 in unique:
+        unique.remove(-1)
+    return len(unique)
+
+
 # visualizes three segmentation methods side-by-side in 3D.
 def visualize_compare(X, labels_nelo, labels_manual, labels_spec, title_nelo = "NeLo Mapper", title_manual = "Manual Mapper", title_spec = "Spectral + KMeans"):
     fig = plt.figure(figsize=(18, 6))
-
     # NeLo + Mapper
     ax1 = fig.add_subplot(131, projection='3d')
     s1 = ax1.scatter(X[:, 0], X[:, 1], X[:, 2], c=labels_nelo, cmap='tab10', s=5)
@@ -97,7 +103,7 @@ def mapper_segmentation(X, L_matrix, n_filters = 2, min_samp = 10, cover_kwargs=
         for pt in pts:
             labels[pt] = li
 
-    return labels, graph
+    return labels, filters
 
 
 # Mapper-based segmentation using manualy computed Laplacian eigenvectors as filters.
@@ -113,38 +119,8 @@ def mapper_segmentation_manual_laplacian(X, sigma = 1.0, n_filters = 2, min_samp
     A   = coo_matrix(W)
     L   = D - A
 
-    #  # compute smallest eigenpairs; the 0th is trivial (constant)
-    vals, vecs = eigsh(L, k=n_filters+1, which='SM')
-    filters = vecs[:, 1:n_filters+1]
-
-    #cover & clusterer defaults
-    if cover_kwargs is None:
-        cover_kwargs = {'n_cubes': 10, 'perc_overlap': 0.3}
-    if clusterer is None:
-        clusterer = DBSCAN(eps=0.05, min_samples=min_samp)
-
-    mapper = km.KeplerMapper(verbose=1)
-    cover  = km.Cover(**cover_kwargs)
-
-    # construct the Mapper graph
-    graph = mapper.map(
-        X=X,
-        lens=filters,
-        cover=cover,
-        clusterer=clusterer
-    )
-
-    # assign labels
-    N = X.shape[0]
-    labels = -1 * np.ones(N, dtype=int)
-    node_list   = list(graph['nodes'].keys())
-    node_to_idx = {nid: i for i, nid in enumerate(node_list)}
-    for nid, pts in graph['nodes'].items():
-        li = node_to_idx[nid]
-        for p in pts:
-            labels[p] = li
-
-    return labels, graph
+    labels, filters = mapper_segmentation(X, L, n_filters, min_samp, cover_kwargs, clusterer)
+    return labels, filters
 
 
 if __name__ == "__main__":
@@ -160,11 +136,34 @@ if __name__ == "__main__":
     Laplacian_matrix = load_npz(laplacian_matrix_path)
 
     # lomparing aproaches
-    map_labels_nelo, graph_nelo = mapper_segmentation(object_mesh, Laplacian_matrix, n_filters=4, min_samp=10, cover_kwargs={'n_cubes':10,'perc_overlap':0.3})
-    map_labels_manual, graph_manual = mapper_segmentation_manual_laplacian(object_mesh, sigma=0.1, n_filters=4, min_samp=10, cover_kwargs={'n_cubes':10,'perc_overlap':0.3})
-    spec_labels, _       = spectral_segmentation(Laplacian_matrix, n_clusters=5)
-
-    print(map_labels_nelo)
+    map_labels_nelo, feat_nelo = mapper_segmentation(object_mesh, Laplacian_matrix, n_filters=4, min_samp=10, cover_kwargs={'n_cubes':10, 'perc_overlap':0.3})
+    map_labels_manual, feat_manual = mapper_segmentation_manual_laplacian(object_mesh, sigma=0.1, n_filters=4, min_samp=10, cover_kwargs={'n_cubes':10,'perc_overlap':0.3})
+    spec_labels, feat_spec       = spectral_segmentation(Laplacian_matrix, n_clusters=5)
 
     # visualize side by side
     visualize_compare(object_mesh, map_labels_nelo, map_labels_manual, spec_labels)
+
+    # ---- compute and print metrics for each method in its own feature space ----
+    methods = {
+        "Spectral+KMeans": (feat_spec,   spec_labels),
+        "Mapper (NeLo)"  : (feat_nelo,   map_labels_nelo),
+        "Mapper (Gauss)" : (feat_manual, map_labels_manual)
+    }
+
+    print(f"\n{'Method':20s}  Silhouette   DBI    CHI        Number of clusters")
+    for name, (feat, labels) in methods.items():
+        sil = silhouette_score(feat, labels)
+        dbi = davies_bouldin_score(feat, labels)
+        chi = calinski_harabasz_score(feat, labels)
+        num_of_clusters = count_clusters(labels)
+        print(f"{name:20s}  {sil:10.3f}  {dbi:6.3f}  {chi:7.3f}   {num_of_clusters}")
+
+    # collect metrics dict
+    metrics = {}
+    for name, (feat, labels) in methods.items():
+        metrics[name] = {
+            'silhouette': silhouette_score(feat, labels),
+            'dbi':         davies_bouldin_score(feat, labels),
+            'chi':         calinski_harabasz_score(feat, labels)
+        }
+    # ---- end new block ----
