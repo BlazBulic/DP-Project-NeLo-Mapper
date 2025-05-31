@@ -15,7 +15,7 @@ Once you run the NeLo's data preparation process you will find your processed ob
 bash script/test_on_plane.sh
 ```
 
-This will save the learned Laplacian matrix in the `out/predicted_L/` folder.
+This will save the learned Laplacian matrix in the `out/predicted_L` folder.
 
 ## Segmentation and Evaluation
 
@@ -43,7 +43,7 @@ example:
 python b_visualize_obj.py data/plane/test_meshes/plane.obj
 ```
 
-For visual guidance check out the 
+For additional information check out the supplemental video: `Supplemental_video.mp4` and the projects report: `Project_Report.pdf`.
 
 
 If you have any questions, please feel free to contact me at bb53717@student.uni-lj.si
